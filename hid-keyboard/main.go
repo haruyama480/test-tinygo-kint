@@ -2,57 +2,75 @@ package main
 
 import (
 	"machine"
-	"machine/usb/hid/keyboard"
 	"time"
 )
 
-var rows = []machine.Pin{
-	machine.D8, machine.D9, machine.D10, machine.D11, machine.D7,
-	machine.D16, machine.D5, machine.D3, machine.D4, machine.D1,
-	machine.D0, machine.D2, machine.D17, machine.D23, machine.D21,
-}
+// debug prints press/release coordinates on CDC. Keep false for Goal 1 release.
+const debug = false
 
-var cols = []machine.Pin{
-	machine.D18, machine.D14, machine.D15,
-	machine.D20, machine.D22, machine.D19, machine.D6,
-}
+var matrix Matrix
 
 func main() {
-	kb := keyboard.Port()
-	machine.USBDev.Configure(machine.UARTConfig{})
+	configureLEDs()
+	matrix.configure()
+	println("kinT TinyGo HID boot keyboard 16C0:0483 report", hidReportLen)
 
-	for _, p := range rows {
-		p.Configure(machine.PinConfig{Mode: machine.PinOutput})
-		p.High()
-	}
-	for _, p := range cols {
-		p.Configure(machine.PinConfig{Mode: machine.PinInputPullup})
-	}
-
-	time.Sleep(2 * time.Second)
-	pressed := false
+	var (
+		pressed   [32]byte
+		idleTicks uint32
+	)
+	period := time.Millisecond
 
 	for {
-		down := scan()
-		if down && !pressed {
-			kb.Write([]byte("tinygo"))
+		t0 := time.Now()
+		matrix.scanOnce()
+		mods, boot := collectKeys(&pressed)
+		if boot {
+			hidSendEmpty()
+			machine.EnterBootloader()
 		}
-		pressed = down
-		time.Sleep(5 * time.Millisecond)
+		report := packReport(&pressed, mods, hidProtocol)
+		hidSend(report, &idleTicks)
+
+		elapsed := time.Since(t0)
+		if elapsed < period {
+			time.Sleep(period - elapsed)
+		}
 	}
 }
 
-func scan() bool {
-	for _, row := range rows {
-		row.Low()
-		time.Sleep(time.Microsecond * 10)
-		for _, col := range cols {
-			if !col.Get() {
-				row.High()
-				return true
+func collectKeys(pressed *[32]byte) (mods uint8, boot bool) {
+	for i := range pressed {
+		pressed[i] = 0
+	}
+	for r := 0; r < NumRows; r++ {
+		for c := 0; c < NumCols; c++ {
+			i := idx(r, c)
+			down := matrix.stable[i]
+			kc := layers[0][i]
+			if down && !matrix.prev[i] {
+				if debug {
+					println("press", r, c, i, uint16(kc))
+				}
+				if kc == KC_BOOTLOADER {
+					boot = true
+				}
+			} else if !down && matrix.prev[i] && debug {
+				println("release", r, c, i, uint16(kc))
+			}
+			matrix.prev[i] = down
+			if !down || kc == KC_NO || kc >= KC_BOOTLOADER {
+				continue
+			}
+			if kc >= 0xE0 && kc <= 0xE7 {
+				mods |= 1 << uint8(kc-0xE0)
+				continue
+			}
+			if kc < 0xE8 {
+				u := uint8(kc)
+				pressed[u/8] |= 1 << (u % 8)
 			}
 		}
-		row.High()
 	}
-	return false
+	return mods, boot
 }
