@@ -16,5 +16,5 @@ cp $(tinygo env TINYGOROOT)/src/device/nxp/mimxrt1062* src/device/nxp/ 2>/dev/nu
 
 ## build and write firmware
 ```
-$(ghq root)/github.com/tinygo-org/tinygo/build/tinygo flash --target teensy41 --size short --stack-size 8kb ./hid_keyboard
+$(ghq root)/github.com/tinygo-org/tinygo/build/tinygo flash --target teensy41 --size short --stack-size 8kb ./hid-keyboard
 ```
