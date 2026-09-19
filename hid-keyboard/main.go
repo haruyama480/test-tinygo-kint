@@ -59,17 +59,19 @@ func collectKeys(pressed *[32]byte) (mods uint8, boot bool) {
 				println("release", r, c, i, uint16(kc))
 			}
 			matrix.prev[i] = down
-			if !down || kc == KC_NO || kc >= KC_BOOTLOADER {
+			if !down || kc == KC_NO {
 				continue
 			}
-			if kc >= 0xE0 && kc <= 0xE7 {
-				mods |= 1 << uint8(kc-0xE0)
+			if kc >= KC_LCTL && kc <= KC_RGUI {
+				mods |= 1 << uint8(kc-KC_LCTL)
 				continue
 			}
 			if kc < 0xE8 {
 				u := uint8(kc)
 				pressed[u/8] |= 1 << (u % 8)
+				continue
 			}
+			mods |= actionMods(kc)
 		}
 	}
 	return mods, boot
