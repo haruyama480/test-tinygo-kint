@@ -5,21 +5,19 @@
 | 文書タイトル | kinT + Teensy 4.1 TinyGo HID キーボード（Goal 1） |
 | 著者 | TBD |
 | 日付 | 2026-09-20 |
-| ステータス | Draft |
-| 対象ディレクトリ | `hid-keyboard/` |
+| ステータス | Implemented |
+| 対象ディレクトリ | `hid-keyboard-g1/` |
 | 対象ハードウェア | [kinT (kint41)](https://github.com/kinx-project/kint) = Kinesis Advantage コントローラ置換 + Teensy 4.1 (MIMXRT1062) |
 
-本設計の実装スコープは **Goal 1: USB Full Speed + HID Report Protocol** である。USB セットアップは Goal 2（HID Boot Protocol / `SET_PROTOCOL` / `GET_PROTOCOL`）を後から足しても組み直さない形にする。USB High Speed は TinyGo `machine/usb` の 64 バイトエンドポイント前提に阻まれるため、本リポジトリの将来課題（Goal 3）とし、Goal 1 では扱わない。
+本設計のスコープは **Goal 1: USB Full Speed + HID Report Protocol** である。実装は `hid-keyboard-g1/`。USB セットアップは Goal 2（HID Boot Protocol）を `hid-keyboard-g2/` で足しても組み直さない。USB High Speed は TinyGo `machine/usb` の 64 バイトエンドポイント前提に阻まれるため Goal 3 とし、ここでは扱わない。
 
 ---
 
 ## Overview
 
-現行の `hid-keyboard/main.go` は、15×7 マトリクスを走査し、いずれかのキーが押されたら TinyGo 標準の `machine/usb/hid/keyboard.Port()` で `"tinygo"` をタイプする検証スタブである。製品ファームウェアではない。`keyboard.Port()` は `init()` で `descriptor.CDCHID`（キーボード + マウス + Consumer、Report ID 付き、Interface Subclass 0）を登録し、クラスリクエストは `SET_IDLE` しか扱わない。Goal 2 で必須の `SET_PROTOCOL` / `GET_PROTOCOL` を後付けできない。
+`hid-keyboard-g1/` は kinT + Teensy 4.1 向け TinyGo HID キーボードである。`machine.ConfigureUSBEndpoint` で CDC + HID Boot Keyboard を自前登録し、`keyboard.Port()` / `machine/usb/hid` は使わない。HID インタフェースは Boot subclass + Keyboard protocol を名乗り、入力は Report ID なしの 8 バイト。Goal 1 は常に Report Protocol として送り、`SET_PROTOCOL` は値を保持して ACK する。
 
-本設計では `keyboard.Port()` を使わない。`github.com/sago35/tinygo-keyboard` の `via.go` と同じく、`machine.ConfigureUSBEndpoint` でディスクリプタとエンドポイント／セットアップハンドラを自前登録する。HID インタフェースは **Boot Interface Subclass + Keyboard Protocol** を Goal 1 の時点で宣言し、入力レポートは **Report ID なしの 8 バイト boot-compatible 形式** に固定する。Goal 1 では常に Report Protocol（リセット直後の HID 仕様デフォルト）として 8 バイトを送り、`SET_PROTOCOL` は値を保持して ACK するだけにする。これで Goal 2 は「プロトコル値に応じた振る舞いの検証と、必要なら NKRO 分岐」に閉じる。
-
-キーマップは QMK `keyboards/kinesis/kint41` のマトリクス座標と default QWERTY を正とする。スキャン極性は本リポジトリで実機確認済みの「行をドライブ、列を読む」を採用する。CDC は TinyGo Teensy 4.1 のデフォルトシリアルとして残し、デバッグ印刷と `tinygo flash` の 1200 bps リセットを維持する。
+キーマップは QMK `kinesis/keymaps/default_pretty`（my-customize）を `keymap.go` に持つ。マトリクスは行ドライブ Low、列プルアップ。CDC を残し、`tinygo flash` の 1200 bps リセットを維持する。
 
 ---
 
@@ -27,14 +25,15 @@
 
 ### 現状
 
-| パス | 役割 | 問題 |
-| --- | --- | --- |
-| `hid-keyboard/main.go` | TinyGo USB HID のスモークテスト | `keyboard.Port()` 依存。キーマップなし。押下で `"tinygo"` を送るだけ |
-| `tinygo-keyboard/` | `sago35/tinygo-keyboard` + Vial + JP 寄りのレイアウト | 製品アーキテクチャではない。内部で結局 `k.Port()` を使う。Vial 用に EP6/EP7 を足す |
-| `usb-midi/main.go` | 同じマトリクスで MIDI ノート | HID とは無関係。ピン配置の参照には使える |
-| QMK `kinesis/kint41` | 現行の実用ファーム | 参照実装。USB HS・NKRO・QMK キーコード。TinyGo にはそのまま持ち込めない |
+| パス | 役割 |
+| --- | --- |
+| `hid-keyboard-g1/` | Goal 1 ファーム（本設計） |
+| `hid-keyboard-g2/` | Goal 2（Boot Protocol） |
+| `tinygo-keyboard/` | `sago35/tinygo-keyboard` + Vial。内部は `k.Port()`。製品経路ではない |
+| `usb-midi/` | 同じマトリクスの MIDI。ピン参照 |
+| QMK `kinesis/kint41` | 実用ファーム。マトリクスとキーマップの参照 |
 
-本リポジトリ README は TinyGo を PR [#5704](https://github.com/tinygo-org/tinygo/pull/5704)（flash）でビルドする。#5704 は #5691 にブロックされ、USB コミットを含む。**ビルドは README どおり #5704 を checkout する**（これで USB デバイスも入る）。USB デバイス本体は PR [#5691](https://github.com/tinygo-org/tinygo/pull/5691)（sago35, `machine/mimxrt1062: add USB device (CDC) support for Teensy 4.x`）。Goal 1 のファームは `machine.Flash` を呼ばない。
+TinyGo は PR [#5704](https://github.com/tinygo-org/tinygo/pull/5704) を checkout してビルドする（[#5691](https://github.com/tinygo-org/tinygo/pull/5691) USB を含む）。Goal 1 は `machine.Flash` を呼ばない。
 
 ### #5691 が決めるハードウェア制約
 
@@ -60,11 +59,10 @@
 
 したがって Goal 1 から **`machine/usb/hid/keyboard` も `machine/usb/hid` も import しない**。
 
-### 痛み
+### 制約
 
-- 検証スタブでは実キー入力ができない。
-- `tinygo-keyboard` は動くが、Vial・6 レイヤ・`k.Port()` 前提で、Boot Protocol を足すと USB 層を作り直すことになる。
-- QMK kint41 は HS + NKRO で、TinyGo FS 64 バイト EP とは前提が違う。マトリクスとキーマップだけ移植する。
+- `tinygo-keyboard` は Vial・`k.Port()` 前提で、Boot Protocol を足すと USB 層を作り直す。
+- QMK kint41 は HS + NKRO。TinyGo FS 64 バイト EP とは前提が違うので、マトリクスとキーマップだけ移植する。
 
 ---
 
@@ -72,7 +70,7 @@
 
 ### Goals（Goal 1）
 
-1. kinT 実機で、QMK default 相当の **単層 QWERTY** が macOS / Linux の HID キーボードとして入力できる。
+1. kinT 実機で、QMK `default_pretty`（my-customize）相当の **単層 QWERTY** が macOS / Linux の HID キーボードとして入力できる。
 2. USB **Full Speed**、HID **Report Protocol**。入力レポートは 8 バイト boot-compatible（6KRO + modifier）。
 3. USB 登録は `machine.ConfigureUSBEndpoint`。`keyboard.Port()` 禁止。
 4. `SET_PROTOCOL` / `GET_PROTOCOL` / `SET_IDLE` / `GET_IDLE` / `SET_REPORT` / `GET_REPORT` の **フックが Goal 1 で存在する**。プロトコル切替のレポート分岐は Goal 2。ただし 8 バイト固定なので Goal 1 の送信経路は Goal 2 でもそのまま使える。
@@ -116,11 +114,11 @@
 6. **CDC を残す。VID:PID は Teensy デフォルト `16C0:0483` を維持。**  
    `targets/teensy41.json` の `serial-port: ["16c0:0483"]` と 1200 bps リセットが切れると、アプリから HalfKay に入れずボタン操作が必要になる。製品用 PID（QMK の `1209:345C` や Teensyduino keyboard `16C0:04D2`）は Goal 2 以降の選択肢。
 
-7. **キーマップは QMK kint41 default（US HID usage）、単層。**  
-   `tinygo-keyboard/main.go` の JP 定数の多くは同じ HID usage の別名（例: US `KeyEqual` 0x2E = JP `KeyHat` 0x2E）。文字の見え方はホスト OS のキーボードレイアウトで決まる。親指クラスタは QMK default を正とし、tinygo-keyboard 側の入れ替えは採用しない。
+7. **キーマップは QMK `default_pretty`（my-customize、US HID usage）、単層。**  
+   定数は `keycode.go`。文字の見え方はホスト OS のキーボードレイアウトで決まる。親指中央は左右 Command（`KC_LGUI` / `KC_RGUI`）。
 
 8. **マトリクスは QMK COL2ROW と同じ極性: 行ドライブ Low、列プルアップ、押下は列 Low。**  
-   QMK `quantum/matrix.c` の `DIODE_DIRECTION == COL2ROW` は `select_row()`（行を出力 Low）→ 列ピンを読む。`keyboard.json` の `"diode_direction": "COL2ROW"` は現行 `hid-keyboard/main.go` / `usb-midi/main.go` と一致する。残差は unselect だけ: QMK 既定は行を Hi-Z+pull-up（`MATRIX_UNSELECT_DRIVE_HIGH` は kint41 では未定義）、スタブは非選択行を High のまま出力する。tinygo-keyboard の `InvertDiode(true)`（行 High / 列 pulldown）は使わない。  
+   QMK `quantum/matrix.c` の `DIODE_DIRECTION == COL2ROW` は `select_row()`（行を出力 Low）→ 列ピンを読む。`keyboard.json` の `"diode_direction": "COL2ROW"` は `hid-keyboard-g1/matrix.go` / `usb-midi/main.go` と一致する。残差は unselect だけ: QMK 既定は行を Hi-Z+pull-up（`MATRIX_UNSELECT_DRIVE_HIGH` は kint41 では未定義）、本ファームは非選択行を High のまま出力する。tinygo-keyboard の `InvertDiode(true)`（行 High / 列 pulldown）は使わない。  
    遅延は **unselect 後に DWT/CYCCNT busy-wait 20 µs**（`kint41.c` の `matrix_output_unselect_delay`。列が HIGH に戻るのを待つ）。select 後は短い settle（1–5 µs、同じく DWT）。スキャン内側で `time.Sleep` は使わない。
 
 9. **デバウンスは 5 ms の per-key defer（連続一致）。スキャン周期 1 ms。**  
@@ -129,8 +127,8 @@
 10. **USB クラスハンドラは Goal 1 で実装する（スタブではない ACK）。**  
     `SET_PROTOCOL` は値を保存して ZLP。送信フォーマットは 8 バイトのまま。`SET_REPORT` は LED に反映する（kinT にインジケータがあるため、Goal 1 でやる価値がある）。`GET_REPORT` は HID 必須リクエストなので last-sent 入力レポート／現在の LED を返す。
 
-11. **`[13,5]` は `KC_BOOTLOADER = 0xF000` → `machine.EnterBootloader()`。**  
-    QMK default の `QK_BOOT` 相当。`Keycode` は `uint16`。`0x0001`–`0x00E7` が HID usage、`0xF000` 以降がファームアクション。`packBoot` は `>= 0xE8` をレポートに入れない（modifier `0xE0`–`0xE7` 以外）。HID usage `0xFF` を番兵にしない。
+11. **ファームアクションは `0xF000` 以降。**  
+    `KC_BOOTLOADER` は `EnterBootloader()`。`KC_MEH` / `KC_LCAG` / `KC_HYPR` は複数 modifier。`KC_DM_*` は Goal 1 では no-op。my-customize キーマップでは `[13,5]` は `KC_DM_RSTP`。`packBoot` は HID usage 以外をレポートに入れない。
 
 12. **登録は `package main` の `init()`。`machine/usb/hid/keyboard` を import しない。**  
     TinyGo は `serial.usb` 時に `InitSerial` → `initUSB` → `EnableUSBCDC` → `USBDev.Configure`（Attach）を main より前に行う。ディスクリプタ置換が `main()` だと、ホストが CDC-only で列挙するレースがある。`init()` で `ConfigureUSBEndpoint` する（tinygo-keyboard `via.go` と同じ）。
@@ -149,7 +147,7 @@ flowchart TB
     PowerLED["D13 Teensy power LED"]
   end
 
-  subgraph fw [hid-keyboard firmware]
+  subgraph fw [hid-keyboard-g1 firmware]
     Scan["matrix scan + debounce"]
     KM["keymap layer0"]
     State["pressed bitmap + modifiers"]
@@ -173,23 +171,21 @@ flowchart TB
 
 ### パッケージ / ファイル配置
 
-実装ディレクトリは `hid-keyboard/`。`tinygo flash --target teensy41 ./hid-keyboard` がそのまま通るよう、**全て `package main`** に置く（TinyGo のファームウェアではサブパッケージの恩恵よりビルド単純さを取る）。
+実装ディレクトリは `hid-keyboard-g1/`。`tinygo flash --target teensy41 ./hid-keyboard-g1` が通るよう、**全て `package main`**。
 
 ```
-hid-keyboard/
+hid-keyboard-g1/
   design.md      本設計
-  main.go        init 配線、メインループ、デバッグ印刷
+  main.go        メインループ、デバッグ印刷
   usb.go         複合ディスクリプタ、ConfigureUSBEndpoint、setup/rx
-  hid.go         protocol/idle 状態、8 バイト pack、送信、GET_REPORT 用キャッシュ（`runtime/interrupt`）
+  hid.go         protocol/idle 状態、8 バイト pack、送信、GET_REPORT 用キャッシュ
   matrix.go      ピン、走査、デバウンス
-  keycode.go     HID usage 定数と KC_BOOTLOADER
-  keymap.go      QMK default 相当の layer0
+  keycode.go     HID usage 定数とファームアクション
+  keymap.go      QMK default_pretty (my-customize) の layer0
   led.go         インジケータ GPIO（active low）と power LED
 ```
 
-`go.mod` の `github.com/sago35/tinygo-keyboard` は `tinygo-keyboard/` 用であり、`hid-keyboard/` は依存しない。
-
-現行 `hid-keyboard/main.go` の `keyboard.Port()` スタブは Goal 1 実装で **置き換えて削除する**（`hid-keyboard/smoke/` には残さない）。デフォルトビルド対象は本設計の `hid-keyboard/` のみ。`tinygo-keyboard/` と `usb-midi/` は別 main として残す。
+`go.mod` の `github.com/sago35/tinygo-keyboard` は `tinygo-keyboard/` 用であり、`hid-keyboard-g1/` は依存しない。`tinygo-keyboard/` と `usb-midi/` は別 main。
 
 ### USB スタック配線（`keyboard.Port()` なし）
 
@@ -200,7 +196,7 @@ sequenceDiagram
   participant RT as TinyGo runtime
   participant M as machine.InitSerial
   participant CDC as machine/usb/cdc
-  participant U as hid-keyboard init
+  participant U as hid-keyboard-g1 init
   participant H as USB host
 
   RT->>M: serial.usb
@@ -359,7 +355,7 @@ func bootKeyboardReportDescriptor() []byte {
 }
 ```
 
-`FindClassHIDType` で書いた `ClassLength` は `len(report)` と一致していなければならない。PR1 レビューで `len(report)` と conf 内 HID descriptor の `wDescriptorLength` を突き合わせる。
+`FindClassHIDType` で書いた `ClassLength` は `len(report)` と一致していなければならない。
 
 #### `ConfigureUSBEndpoint` 呼び出し
 
@@ -390,7 +386,7 @@ func init() {
 }
 ```
 
-`main()` で `machine.USBDev.Configure` を再度呼ぶ必要はない（`initcomplete` なら no-op）。現行スタブの `Configure` 呼び出しは削除する。
+`main()` で `machine.USBDev.Configure` を再度呼ぶ必要はない（`initcomplete` なら no-op）。
 
 ### HID レポート形式
 
@@ -565,15 +561,15 @@ QMK の `LINE_PINx` は Teensy デジタルピン番号 `Dx` に一致する。
 
 #### ダイオードとドライブ方向
 
-QMK JSON は `"diode_direction": "COL2ROW"`。QMK `quantum/matrix.c` でこれは **行を出力 Low（`select_row`）、列を入力プルアップで読む**。`ROW2COL` が列ドライブである。現行スタブと同じ極性。
+QMK JSON は `"diode_direction": "COL2ROW"`。QMK `quantum/matrix.c` でこれは **行を出力 Low（`select_row`）、列を入力プルアップで読む**。`ROW2COL` が列ドライブである。本ファームと同じ極性。
 
 | 実装 | 選択 | 非選択 | 入力 | 押下 |
 | --- | --- | --- | --- | --- |
 | QMK COL2ROW（`matrix.c`） | 行 Low | 行 Hi-Z+pull-up（kint41 は `MATRIX_UNSELECT_DRIVE_HIGH` 未定義） | 列 Pullup | 列 Low |
-| `hid-keyboard/main.go`, `usb-midi/main.go` | 行 Low | 行 High（出力のまま） | 列 Pullup | `!col.Get()` |
+| `hid-keyboard-g1/matrix.go`, `usb-midi/main.go` | 行 Low | 行 High（出力のまま） | 列 Pullup | `!col.Get()` |
 | `tinygo-keyboard` + `InvertDiode(true)` | 行 High | 行を pulldown 入力に戻す | 列 Pulldown | `col.Get()` |
 
-Goal 1 は **hid-keyboard スタブと同じ**（行 Low 選択、非選択行は High 出力、列 Pullup、押下は Low）。QMK との差は unselect が Hi-Z ではなく drive-High なことだけ。drive-High の方が列の立ち上がりは速いが、kint41 が測った 20 µs は Hi-Z 復帰向けなので、同じ 20 µs を unselect 後に置く（過剰でも害は少ない）。tinygo-keyboard の反転スキームは使わない。
+Goal 1 は **行 Low 選択、非選択行は High 出力、列 Pullup、押下は Low**。QMK との差は unselect が Hi-Z ではなく drive-High なことだけ。drive-High の方が列の立ち上がりは速いが、kint41 が測った 20 µs は Hi-Z 復帰向けなので、同じ 20 µs を unselect 後に置く（過剰でも害は少ない）。tinygo-keyboard の反転スキームは使わない。
 
 ダイオードはスイッチと直列なので、同時押しでもゴーストはハードウェアが防ぐ。ソフトウェア側のアンチゴーストは実装しない。未実装交差点は常にオープン。キーマップは `KC_NO`。
 
@@ -644,92 +640,34 @@ func (m *Matrix) scanOnce() {
 
 #### 表現
 
-```go
-type Keycode uint16 // 0x00=なし, 0x01–0xE7=HID usage page 7, 0xF000+=ファームアクション
+HID usage とファームアクションは `keycode.go` の `KC_*` 定数。layer0 の 105 セルは `keymap.go` が正。`machine/usb/hid/keyboard` は import しない。modifier `KC_LCTL`–`KC_RGUI` は pack 時にビットへ折り畳む。`KC_MEH` / `KC_LCAG` / `KC_HYPR` は複数 modifier ビット。`packBoot` は HID usage 以外をレポートに出さない。
 
-const (
-    NumRows   = 15
-    NumCols   = 7
-    NumLayers = 2
-    KC_NO         Keycode = 0x0000
-    KC_BOOTLOADER Keycode = 0xF000 // [13,5] QK_BOOT。EnterBootloader()
-)
-
-var layers [NumLayers][NumRows * NumCols]Keycode
-
-func idx(row, col int) int { return row*NumCols + col }
-```
-
-`machine/usb/hid/keyboard` は import しない（`init()` が USB を奪う）。modifier は usage `0xE0–0xE7` をキーマップに置き、pack 時にビットへ折り畳む。`packBoot` は `kc >= 0xE8` をレポートに出さない。HID usage `0xFF`（予約）を番兵にしない。LANG2/Hanja は `0x91` であり `0xFF` ではないが、page 7 とファームアクションを混ぜない。
-
-Goal 1 は layer 0 のみ読む。layer 1 は全 `KC_NO`。将来 `MO(1)` を足しても配列を広げなくてよい。
+Goal 1 は layer 0 のみ読む。layer 1 は全 `KC_NO`。
 
 #### QMK LAYOUT → (row, col)
 
-レシピ（PR3 の正）:
+1. `keyboards/kinesis/kint41/keyboard.json` の `layouts.LAYOUT.layout` を配列順に辿る。`matrix: [row, col]` がセル。
+2. 同じ順で `keyboards/kinesis/keymaps/default_pretty/keymap.c` の `LAYOUT(...)` を割り当てる。ASCII アートは使わない。
+3. インデックスは `row*7+col`。正本は `keymap.go`。
 
-1. `keyboards/kinesis/kint41/keyboard.json` の `layouts.LAYOUT.layout` を **配列順** に辿る。各要素の `matrix: [row, col]` がセル。
-2. 同じ順で `keyboards/kinesis/keymaps/default/keymap.c` の `LAYOUT(...)` 引数を割り当てる。kint41 配下に `keymaps/` は無い。
-3. そのファイル先頭の ASCII アートは **使わない**（F7/F11 が欠け、FN0 と書いてあるが `LAYOUT()` は `KC_NO, QK_BOOT`）。
+物理キー 86。親指クラスタ（my-customize）:
 
-インデックスは `row*7+col`。layer0 の 105 セル（空きは `KC_NO`）。`RGUI` は HID `0xE7`（Right GUI）。`KC_BOOTLOADER = 0xF000`。
+| (r,c) | キー |
+| --- | --- |
+| 5,6 | LCtl |
+| 5,5 | LCAG（Ctrl+Alt+GUI） |
+| 9,6 | PgDn |
+| 8,5 | PgUp |
+| 3,5 | Esc |
+| 8,6 | Bspc |
+| 3,6 | Space |
+| 4,6 | LGUI（左 Command） |
+| 2,5 | LAlt |
+| 6,6 | MEH（Ctrl+Shift+Alt） |
+| 7,5 | RGUI（右 Command） |
+| 6,5 | Enter |
 
-```go
-// keymap.go layer0[row*7+col]。HID usage。0xF000 = bootloader。
-var layer0 = [NumRows * NumCols]Keycode{
-    // row 0
-    0x2E, 0x2B, 0x39, 0xE1, 0x00, 0x00, 0x00, // = Tab Caps LSft
-    // row 1
-    0x1E, 0x14, 0x04, 0x1D, 0x35, 0x00, 0x00, // 1 Q A Z `
-    // row 2
-    0x1F, 0x1A, 0x16, 0x1B, 0x49, 0x4D, 0x00, // 2 W S X Ins End
-    // row 3
-    0x20, 0x08, 0x07, 0x06, 0x50, 0x4A, 0x2A, // 3 E D C Left Home Bspc
-    // row 4
-    0x21, 0x15, 0x09, 0x19, 0x00, 0x00, 0x4C, // 4 R F V           Del
-    // row 5
-    0x22, 0x17, 0x0A, 0x05, 0x4F, 0xE2, 0xE0, // 5 T G B Right LAlt LCtl
-    // row 6
-    0x23, 0x1C, 0x0B, 0x11, 0x52, 0x2C, 0x4E, // 6 Y H N Up Spc PgDn
-    // row 7
-    0x24, 0x18, 0x0D, 0x10, 0x00, 0x28, 0x00, // 7 U J M     Ent
-    // row 8
-    0x25, 0x0C, 0x0E, 0x36, 0x51, 0xE4, 0x4B, // 8 I K , Down RCtl PgUp
-    // row 9
-    0x26, 0x12, 0x0F, 0x37, 0x2F, 0x00, 0xE7, // 9 O L . [     RGUI
-    // row 10
-    0x27, 0x13, 0x33, 0x38, 0x30, 0x00, 0x00, // 0 P ; / ]
-    // row 11
-    0x2D, 0x31, 0x34, 0xE5, 0x00, 0x00, 0x00, // - \ ' RSft
-    // row 12
-    0x29, 0x3C, 0x3F, 0x42, 0x45, 0x48, 0x00, // Esc F3 F6 F9 F12 Pause
-    // row 13
-    0x3A, 0x3D, 0x40, 0x43, 0x46, 0xF000, 0x00, // F1 F4 F7 F10 PSCR BOOT
-    // row 14
-    0x3B, 0x3E, 0x41, 0x44, 0x47, 0x00, 0x00, // F2 F5 F8 F11 ScrLk (KC_NO)
-}
-```
-
-物理キー 86。`(14,5)` は物理キーがあるが QMK default は `KC_NO`。
-
-**親指クラスタ（QMK default。tinygo-keyboard とは入れ替えあり。こちらを採用）**
-
-| (r,c) | QMK default | tinygo-keyboard（採用しない） |
-| --- | --- | --- |
-| 5,6 | LCtrl | LAlt |
-| 5,5 | LAlt | LCtrl |
-| 9,6 | RGUI | RCtrl |
-| 8,5 | RCtrl | RAlt |
-| 3,5 | Home | Home |
-| 8,6 | PgUp | PgUp |
-| 3,6 | Backspace | Delete |
-| 4,6 | Delete | Backspace |
-| 2,5 | End | End |
-| 6,6 | PgDn | PgDn |
-| 7,5 | Enter | Enter |
-| 6,5 | Space | Space |
-
-物理キー数は LAYOUT 配列どおり **86**。15×7=105 セルのうち残りはスイッチ無し。
+ファンクション行の `KC_DM_*` は Goal 1 では no-op。`KC_BOOTLOADER` 定数はあるが、このキーマップでは割り当てていない。
 
 #### US vs JP
 
@@ -779,46 +717,20 @@ flowchart LR
 デバッグ:
 
 ```go
-const debug = true // Goal 1 の PR2–PR4。PR5 で Goal 1 完了にする直前に false
+const debug = false
 ```
 
-- `debug == true` のとき押下/離鍵で CDC に `r,c idx usage` を `println`。86 キーの `(r,c)` を `keyboard.json` の `layout` 順と照合する。
-- PR5 チェックリストで `false` にしてから Goal 1 完了とする。キーログをシリアルに残さない。
+- `debug == true` のとき押下/離鍵で CDC に `r,c idx usage` を `println`。キーログをシリアルに残さないため既定は `false`。
 
 周期: スキャン ~0.4 ms + 処理。1 ms 周期の残りだけ `time.Sleep`。スキャン内側では DWT。USB bInterval=1 ms に対し 1–2 ms に 1 レポートなら十分。
 
 期待負荷: キー入力バーストでも EP3 は 8 バイト / 1 ms = 8 KB/s。FS 12 Mbps に対して無視できる。CPU は 600 MHz 相当の Cortex-M7 でマトリクス走査は問題にならない。
 
-### Goal 2 / Goal 3 で変わるもの（Goal 1 が角を折れないように）
+### Goal 2 / Goal 3
 
-**Goal 2 — HID Boot Protocol**
+Goal 2（HID Boot Protocol）は `hid-keyboard-g2/design.md`。Goal 1 が渡すもの: Boot subclass、8 バイト Report ID なし、SET/GET_PROTOCOL の ACK、`packReport(protocol)` シグネチャ。
 
-既に Goal 1 で用意するもの:
-
-- Boot subclass/protocol ビット
-- 8 バイト Report ID なし
-- `SET_PROTOCOL` / `GET_PROTOCOL` の保存と ACK
-- `SET_IDLE` / `GET_IDLE` / `GET_REPORT` / `SET_REPORT`
-
-Goal 2 の作業:
-
-- BIOS/UEFI / macOS 起動画面での入力確認。
-- ホストが `SET_PROTOCOL(0)` した後も 8 バイトを送れていることのパケット確認。
-- Boot モードの電源投入 default として `hidIdle = 125`（500 ms）を検討する。Report モードは 0 のままでよい。送信経路は変えない。
-- バスリセット後に `hidProtocol` が Boot のまま残る TinyGo ギャップが出たら、リセットフックを TinyGo に足す。
-- （任意）Report Protocol だけ NKRO に分岐。そのときは report descriptor に Report ID 付きビットマップを追加し、`packReport(protocol)` の分岐を実装。USB 登録経路（`ConfigureUSBEndpoint`、EP 番号、setupHandler の switch）は触らない。
-- TinyGo が HID descriptor type 0x21 の GET_DESCRIPTOR を ZLP してしまう問題が BIOS で出たら、TinyGo `sendDescriptor` へのパッチ（本リポジトリ外）。
-
-**Goal 3 — USB High Speed**
-
-Goal 1/2 のディスクリプタやマトリクスは再利用するが、次は TinyGo 本体の変更が先:
-
-- `EndpointPacketSize = 64` と mimxrt `PFSC`（FS 強制）の撤去。
-- HS では Interrupt の `bInterval` が 125 µs マイクロフレーム指数。
-- Bulk 512、DMA バッファ拡張、OCRAM レイアウト見直し。
-- QMK kint41 は HS で 1 ms 未満ポーリングしているが、本ファームは TinyGo が直るまで FS 1 ms。
-
-Goal 1 で 64 バイト前提の独自 DMA を書かないこと。送信は必ず `machine.SendUSBInPacket`。
+Goal 3（USB HS）は TinyGo `EndpointPacketSize` / `PFSC` の変更が先。送信は `machine.SendUSBInPacket` のみ。
 
 ---
 
@@ -826,23 +738,15 @@ Goal 1 で 64 バイト前提の独自 DMA を書かないこと。送信は必�
 
 外部 Go API は無い（`package main` ファームウェア）。ホストから見た USB インタフェースは次のとおり。
 
-**Before（現行スタブ + `keyboard.Port()`）**
+ホストから見た USB:
 
-- IF0/1 CDC、IF2 HID subclass 0 protocol 0
-- HID report: mouse + keyboard(ID 2) + consumer
-- キーボード入力 9 バイト
-- クラスリクエスト: SET_IDLE のみ
-- キー入力: 任意キーで `"tinygo"` をタイプ
-
-**After（Goal 1）**
-
-- IF0/1 CDC は維持
+- IF0/1 CDC
 - IF2 HID **Boot Keyboard**
 - キーボード入力 **8 バイト**、マウス/consumer なし
 - クラスリクエスト: GET/SET_REPORT, GET/SET_IDLE, GET/SET_PROTOCOL
-- キー入力: QMK default 相当の HID usage
+- キー入力: `keymap.go` の HID usage
 
-TinyGo 標準キーボードを使う他バイナリ（`tinygo-keyboard/`）とは USB 構成が異なる。同じデバイスに両方を同時に焼かない。
+`tinygo-keyboard/` とは USB 構成が異なる。同じデバイスに両方を同時に焼かない。
 
 ---
 
@@ -865,9 +769,9 @@ TinyGo 標準キーボードを使う他バイナリ（`tinygo-keyboard/`）と�
 
 ## Alternatives Considered
 
-### A. `keyboard.Port()` を使い続ける
+### A. `keyboard.Port()` を使う
 
-- 利点: 数行で文字を送れる。現行スタブが既にこの形。
+- 利点: TinyGo 標準の文字入力ヘルパが使える。
 - 欠点: Report ID 付き 9 バイト、subclass 0、`SET_PROTOCOL` stall。Goal 2 で USB 層を破棄することになる。**不採用**。
 
 ### B. `sago35/tinygo-keyboard` を製品にする
@@ -903,7 +807,7 @@ TinyGo 標準キーボードを使う他バイナリ（`tinygo-keyboard/`）と�
 | 脅威 | 深刻度 | 緩和 |
 | --- | --- | --- |
 | 本デバイスは HID キーボードであり、任意キーをホストに注入できる | 仕様 | 物理アクセス前提。無線なし |
-| CDC デバッグがキーログになる | 中 | PR2–PR4 は `debug = true`（座標校正に必須）。PR5 で `false` にして Goal 1 完了 |
+| CDC デバッグがキーログになる | 中 | 既定 `debug = false` |
 | `KC_BOOTLOADER` で HalfKay に落ち、任意ファームを焼ける | 中 | 物理キーが必要。QMK も `QK_BOOT` がある |
 | USB 複合デバイスとしての不正 descriptor | 低 | 固定 ROM。動的書き換えなし |
 | Flash キーマップ改ざん | — | Goal 1 は永続化しない |
@@ -942,7 +846,7 @@ QMK kint41 は `-DCORTEX_ENABLE_WFI_IDLE=FALSE`（`rules.mk`、kinx-project/kint
 サービス段階リリースではない。フラッシュ単位。
 
 1. Teensy プログラムボタンで HalfKay に入れる（失敗時の逃げ）。`KC_BOOTLOADER` が動けばボタンなし。
-2. README どおり TinyGo #5704（#5691 USB を含む）で `./hid-keyboard` を flash。
+2. README どおり TinyGo #5704（#5691 USB を含む）で `./hid-keyboard-g1` を flash。
 3. ホストで CDC が出ること、続けて HID Boot Keyboard が出ることを確認。
 4. 既知フレーズ（`asdf`、親指 Backspace、修飾+キー）を入力。
 5. Caps Lock で D12 が反転すること。
@@ -950,20 +854,11 @@ QMK kint41 は `-DCORTEX_ENABLE_WFI_IDLE=FALSE`（`rules.mk`、kinx-project/kint
 
 フラグ:
 
-- `debug` const。PR2–PR4 は `true`、PR5 で `false`。
+- `debug` const（既定 `false`）。
 - `debounceTicks`。
-- VID/PID はコード上いつでも `usb.VendorID` で上書きできるが Goal 1 では触らない。
+- VID/PID は Goal 1 では触らない。
 
-ロールバック: HalfKay + 直前の `.hex`（QMK または旧 TinyGo スタブ）。アプリ PID を変えていなければ `tinygo flash` の自動リセットも生きる。
-
-段階:
-
-1. USB 列挙のみ（キーなし）
-2. マトリクス debug
-3. HID 入力
-4. LED / クラスリクエスト
-
-各段階が下記 PR に対応する。
+ロールバック: HalfKay + 直前の `.hex`（QMK または本ファーム）。PID を変えていなければ `tinygo flash` の自動リセットも生きる。
 
 ---
 
@@ -1005,10 +900,10 @@ hidapitester --vidpid 16C0:0483 --open --read-input
 
 ### レイアウト
 
-ホストを **US 配列** にして QMK default どおりタイプできること:
+ホストを **US 配列** にして `keymap.go` どおりタイプできること:
 
-- 左上 `=`、数字行、QWERTY、親指 Space / Enter / Backspace
-- `[13,5]` で HalfKay（teensy_loader が待つ）
+- 左上 `=`、数字行、QWERTY
+- 親指 Space / Enter、左右 Command（`[4,6]` / `[7,5]`）
 
 ホストを JIS にすると同じ usage が JIS 文字になる。それは成功（ファームは usage しか送っていない）。
 
@@ -1021,7 +916,7 @@ Linux:
 # bmRequestType=0x21 bRequest=0x0B (SET_PROTOCOL) を観察
 ```
 
-Goal 1 合格条件: SET_PROTOCOL が stall しない（ZLP で ACK）。**この確認は PR1 で行う**（usbmon またはホストから SET_PROTOCOL/GET_PROTOCOL を 1 回）。値によるレポート形状変化は Goal 2。
+Goal 1 合格条件: SET_PROTOCOL が stall しない（ZLP で ACK）。値によるレポート形状変化は Goal 2。
 
 ### LED
 
@@ -1029,7 +924,7 @@ Caps Lock トグルで D12 が反転。Num/Scroll はホストがビットを送
 
 ### 回帰
 
-- `tinygo flash --target teensy41 --size short --stack-size 8kb ./hid-keyboard` が 1200 bps リセットで成功する（CDC 生存）。
+- `tinygo flash --target teensy41 --size short --stack-size 8kb ./hid-keyboard-g1` が 1200 bps リセットで成功する（CDC 生存）。
 - `tinygo-keyboard/` は本設計の変更で壊さない（別 main）。
 
 ---
@@ -1038,33 +933,28 @@ Caps Lock トグルで D12 が反転。Num/Scroll はホストがビットを送
 
 | ID | リスク | 深刻度 | 緩和 |
 | --- | --- | --- | --- |
-| R1 | `keyboard.Port()` を誤 import し `init()` が CDCHID を再登録 | 高 | hid-keyboard から `machine/usb/hid` を import しない。レビューで確認 |
-| R2 | `ConfigureUSBEndpoint` がディスクリプタを置換するため、CDC 部分を落とすとシリアル消失 | 高 | 複合ディスクリプタを CDC 部品から組む。flash 後に tty が見えることを PR1 で確認 |
+| R1 | `keyboard.Port()` を誤 import し `init()` が CDCHID を再登録 | 高 | `hid-keyboard-g1` から `machine/usb/hid` を import しない |
+| R2 | `ConfigureUSBEndpoint` がディスクリプタを置換するため、CDC 部分を落とすとシリアル消失 | 高 | 複合ディスクリプタを CDC 部品から組む。flash 後に tty が見えること |
 | R3 | Attach が machine init で先行し、一瞬 CDC-only 列挙 | 低 | アプリ `init()` で即座に置換。実害が出たら Detach → 置換 → Attach |
 | R4 | TinyGo が HID class GET_DESCRIPTOR (0x21) を ZLP | 低（OS）/ 中（BIOS） | Goal 1 の OS は config 内 HID desc で足りる。Goal 2 で必要なら TinyGo パッチ |
 | R5 | `ReceiveUSBControlPacket` が 7 バイト固定 | 低 | LED 1 バイト。NKRO feature report を足すときは TinyGo 側拡張 |
 | R6 | FS 強制 + 64 バイト EP。HS 化できない | 情報 | Goal 3。QMK 比でポーリングは 1 ms が下限 |
 | R7 | 6KRO 超過 | 低 | ErrorRollOver。内部ビットマップがあるので Goal 2 で NKRO 可 |
-| R8 | unselect が QMK Hi-Z ではなく drive-High | 低 | 同じ COL2ROW 極性。PR2 で 86 キーの `(r,c)` を `keyboard.json` layout 順と CDC で校正。ゴーストや隣接誤検出が出たら unselect 20 µs を延長 |
+| R8 | unselect が QMK Hi-Z ではなく drive-High | 低 | 同じ COL2ROW 極性。ゴーストや隣接誤検出が出たら unselect 20 µs を延長 |
 | R9 | QMK debounce 50 ms を無視して 5 ms にしたことによるチャタ | 低 | 定数化。症状が出たら上げる |
 | R10 | キー欠け | 中 | TinyGo mimxrt は WFI を使っていない（コメントアウト + run mode）。WFI を再有効化しない。欠けたら `SendUSBInPacket` busy / unselect 遅延 / `println` 飢餓を疑う |
 | R11 | `SendUSBInPacket` が busy で最新以外を失う | 低 | スナップショット再送。押しっぱなしは次の idle または変化で回復 |
 | R12 | グローバル HID/Interface/Device 配列 | 低 | `InterfaceHID` はコピーしてから subclass を書く。`ClassLength` は `FindClassHIDType` で組み立て後の conf をパッチ。`DeviceCDC.Bytes()` は GET_DESCRIPTOR Device 時に TinyGo `Configure()` が mutate する（既存動作）。EndpointIN は本ディスクリプタでは 5 スロットが衝突しない |
-| R13 | 親指キーマップを tinygo-keyboard からコピーしてしまう | 中 | 本設計の 105 セル表と QMK `LAYOUT()` を `keymap.go` コメントに残す |
+| R13 | 親指キーマップを取り違える | 中 | 正本は `keymap.go`（my-customize `default_pretty`） |
 | R14 | USB 無し TinyGo でビルド | 高 | README どおり #5704 を checkout（#5691 USB を含む）。`machine_mimxrt1062_usb.go` の存在を確認。Goal 1 は `machine.Flash` を呼ばない |
-| R15 | `SET_REPORT` で `WLength==0` のとき `ReceiveUSBControlPacket` が USB IRQ をブロック | 高 | `WLength==0` では呼ばず ZLP。PR1 の setupHandler レビュー項目 |
+| R15 | `SET_REPORT` で `WLength==0` のとき `ReceiveUSBControlPacket` が USB IRQ をブロック | 高 | `WLength==0` では呼ばず ZLP |
 | R16 | `hidLastIN` の 8 バイトが IRQ と main で撕裂 | 低 | `interrupt.Disable` 下で `[8]byte` コピー。pack は静的配列 |
 
 ---
 
 ## Open Questions
 
-実装に落とせるものは Key Decisions で閉じた。残るのは好みの確認だけである。
-
-1. **リリース時の `usb.Product` 文字列**（暫定 `kinT TinyGo`）。QMK の `kinT (kint41)` に寄せるか。コーディングはブロックしない。
-2. **`[14,5]` を Goal 1 でも何かにするか。** QMK default は `KC_NO`。物理キーはある。Fn レイヤは Goal 1 対象外なので空のまま。NumLock を置きたいなら keymap 1 行。
-
-VID/PID、JP vs US、CDC 有無、6KRO vs NKRO、スキャン極性、Windows、デバッグ既定は Key Decisions 済み。
+なし。`usb.Product` は `kinT TinyGo`。キーマップは `keymap.go`。
 
 ---
 
@@ -1075,83 +965,14 @@ VID/PID、JP vs US、CDC 有無、6KRO vs NKRO、スキャン極性、Windows、
 - ローカル TinyGo: `src/machine/machine_mimxrt1062_usb.go`, `src/machine/usb.go`, `src/machine/usb/descriptor/hid.go`（`FindClassHIDType`）, `src/machine/usb/hid/keyboard/keyboard.go`, `src/machine/board_teensy41.go`, `src/runtime/runtime_mimxrt1062_time.go`
 - `github.com/sago35/tinygo-keyboard` `via.go`（`ConfigureUSBEndpoint` の先例。Vial 用で Boot 非対応。CDCHID を in-place 改変）
 - QMK `keyboards/kinesis/kint41/{keyboard.json,kint41.c,config.h,rules.mk}`
-- QMK キーマップ正本: `keyboards/kinesis/keymaps/default/keymap.c`（kint41 配下ではない。ASCII アートは不正確）
+- QMK キーマップ正本: `keyboards/kinesis/keymaps/default_pretty/keymap.c`（my-customize）
 - QMK `quantum/matrix.c` COL2ROW = `select_row`
-- 本リポジトリ `hid-keyboard/main.go`, `tinygo-keyboard/main.go`, `usb-midi/main.go`
+- 本リポジトリ `hid-keyboard-g1/`, `tinygo-keyboard/`, `usb-midi/`
 - [USB HID 1.11](https://www.usb.org/sites/default/files/documents/hid1_11.pdf) §7.2 クラスリクエスト, Appendix B Boot Interface, Appendix C keyboard
 - kinT ハードウェア: https://github.com/kinx-project/kint
 
 ---
 
-## PR Plan
+## Implementation status
 
-実装は `hid-keyboard/` に対する直列 PR。各 PR は実機で検証してから次へ進む。
-
-### PR 0 — 本設計書
-
-- **タイトル:** `docs: hid-keyboard Goal 1 設計 (FS + Report Protocol, Boot 配線済み)`
-- **対象:** `hid-keyboard/design.md`
-- **依存:** なし
-- **内容:** 本ファイルの追加。コード変更なし。
-
-### PR 1 — USB 複合デバイス骨格
-
-- **タイトル:** `hid-keyboard: CDC + HID Boot Keyboard を ConfigureUSBEndpoint で登録する`
-- **対象:** `hid-keyboard/usb.go`, `hid-keyboard/hid.go`（状態と setupHandler / `hidRxLEDs`）, `hid-keyboard/main.go`（`keyboard.Port()` 削除、空ループ + CDC `println`）
-- **依存:** PR 0
-- **内容:**
-  - `machine/usb/hid` を import しない。レビューで `go list -f '{{.Imports}}'` にそれが無いこと。
-  - `init()` で複合ディスクリプタと EP3、`hidSetup` を登録。`FindClassHIDType` で `ClassLength = len(report)`。`CDCHID` を mutate しない。
-  - GET/SET_PROTOCOL・IDLE・REPORT を表どおり ACK。`SET_REPORT` は `WLength==0` で `ReceiveUSBControlPacket` を呼ばない。LED GPIO はまだしない。
-  - 任意だが推奨: 1 Hz で空 8 バイトを **同じ** `SendUSBInPacket(usb.HID_ENDPOINT_IN, ...)` 経路で送る（後のキーレポートと第二プロデューサを作らない）。
-  - 検証: `lsusb` で subclass 1 / protocol 1 / wMaxPacket 8。CDC で起動メッセージ。`tinygo flash` の 1200 bps リセット。**usbmon 等で SET_PROTOCOL / GET_PROTOCOL が stall しないこと**（Goal 2 契約の中核。後回しにしない）。
-
-### PR 2 — マトリクススキャンと座標デバッグ
-
-- **タイトル:** `hid-keyboard: 15x7 マトリクス走査とデバウンス`
-- **対象:** `hid-keyboard/matrix.go`, `hid-keyboard/led.go`（power LED D13 のみ）, `hid-keyboard/main.go`
-- **依存:** PR 1
-- **内容:**
-  - 行ドライブ Low、非選択行 High、列 Pullup。select 後 DWT 5 µs、unselect 後 DWT 20 µs。スキャン内側に `time.Sleep` を置かない。1 ms 周期、5 ms defer デバウンス。
-  - `const debug = true`。CDC に `press/release r,c idx`。
-  - 86 キーの `(r,c)` を **`keyboard.json` の `layouts.LAYOUT.layout` 順** と照合（ASCII アートや「QMK LAYOUT」という言い方だけに頼らない）。
-  - 検証: 各物理キーが期待座標。隣接誤検出が無ければダイオード + unselect 遅延は足りている。HID は空レポートのままでよい。
-
-### PR 3 — キーマップと HID 入力
-
-- **タイトル:** `hid-keyboard: QMK default キーマップと 8 バイト HID レポート`
-- **対象:** `hid-keyboard/keycode.go`, `hid-keyboard/keymap.go`（本設計の 105 セル表）, `hid-keyboard/hid.go`（pack/send）, `hid-keyboard/main.go`
-- **依存:** PR 2
-- **内容:**
-  - layer0 = 本設計の 105 セル。ソースは `keyboards/kinesis/keymaps/default/keymap.c` の `LAYOUT()` と `keyboard.json` の matrix。`[13,5] = KC_BOOTLOADER`（`0xF000`）。
-  - 変化時送信、usage 昇順 6KRO、超過時 ErrorRollOver、modifier 折り畳み。静的 `[8]byte`。
-  - 検証（US レイアウトホスト）:
-    - `asdf`、`,` `.` `/`、左上 `=`
-    - 親指 Space / Enter / Backspace / Delete
-    - LCtrl / LAlt / RGUI / RCtrl + 文字
-    - `[13,5]` HalfKay
-    - 任意: 非 modifier 7 キー同時で 6 スロットが `0x01`
-    - `hidapitester` で 8 バイト・Report ID なし
-
-### PR 4 — LED とアイドル再送
-
-- **タイトル:** `hid-keyboard: SET_REPORT / Interrupt OUT でインジケータ LED、SET_IDLE 再送`
-- **対象:** `hid-keyboard/led.go`, `hid-keyboard/usb.go`, `hid-keyboard/hid.go`
-- **依存:** PR 3
-- **内容:**
-  - D12/D26/D25/D24 active low。Caps Lock 往復（ホスト SET_REPORT が来る）。
-  - `hidIdle != 0` のとき 4 ms 単位で同一レポート再送。ファーム内で `hidIdle` を強制してカウンタを確認する（usbmon 任意ではなく、少なくともファーム側の経過判定をテストする）。
-  - GET_REPORT が last IN / 現在 LED を返すこと。
-  - 検証: Caps LED。可能なら Num/Scroll。
-
-### PR 5 — 検証手順とスタブ削除
-
-- **タイトル:** `hid-keyboard: 検証手順を README に足し、旧スタブを削除する`
-- **対象:** `README.md`（ビルドは #5704 TinyGo + `./hid-keyboard`。列挙・SET_PROTOCOL・入力の確認コマンド）、`hid-keyboard/main.go` から残っていれば `keyboard.Port()` 経路を完全削除。`hid-keyboard/smoke/` は作らない。
-- **依存:** PR 4
-- **内容:**
-  - `debug` を `false` にする。
-  - Goal 1 完了条件: 列挙、US 入力、LED、1200 bps flash、SET_PROTOCOL 非 stall、`machine/usb/hid` 非 import。
-  - Goal 2 の入り口（BIOS で `SET_PROTOCOL(0)`、idle default 125 の検討）を README に 1 段落。
-
-PR 1 は USB だけ、PR 2 は GPIO だけ、PR 3 で初めて「キーボード」になる。レビューはそれぞれ独立して実機ログを見られる。
+Goal 1 は `hid-keyboard-g1/` に実装済み。Goal 2 は `hid-keyboard-g2/`。
