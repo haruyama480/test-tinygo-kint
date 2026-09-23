@@ -8,3 +8,5 @@ require (
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
 	tinygo.org/x/drivers v0.33.0 // indirect
 )
+
+replace github.com/sago35/tinygo-keyboard => ../../sago35/tinygo-keyboard
