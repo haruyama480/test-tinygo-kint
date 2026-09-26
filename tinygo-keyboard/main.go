@@ -7,14 +7,6 @@ import (
 	"machine/usb"
 
 	keyboard "github.com/sago35/tinygo-keyboard"
-	"github.com/sago35/tinygo-keyboard/keycodes"
-)
-
-const (
-	kcNO keyboard.Keycode = 0
-	// QMK KC_MEH and LCA(KC_LGUI). The low byte of KC_MEH is KC_NO.
-	kcMEH  keyboard.Keycode = keycodes.TypeXCtl | keycodes.TypeXSft | keycodes.TypeXAlt
-	kcLCAG keyboard.Keycode = keycodes.TypeXCtl | keycodes.TypeXAlt | 0xE3
 )
 
 // Same pins and row*7+col order as hid-keyboard-g1.
@@ -32,21 +24,21 @@ var rows = []machine.Pin{
 // QMK kinesis/keymaps/default_pretty (my-customize), US HID usages.
 // Dynamic macros are KC_NO.
 var layer0 = [15 * 7]keyboard.Keycode{
-	keycodes.KeyEqual, keycodes.KeyTab, keycodes.KeyLeftCtrl, keycodes.KeyLeftShift, kcNO, kcNO, kcNO,
-	keycodes.Key1, keycodes.KeyQ, keycodes.KeyA, keycodes.KeyZ, keycodes.KeyGrave, kcNO, kcNO,
-	keycodes.Key2, keycodes.KeyW, keycodes.KeyS, keycodes.KeyX, keycodes.KeyInsert, keycodes.KeyLeftAlt, kcNO,
-	keycodes.Key3, keycodes.KeyE, keycodes.KeyD, keycodes.KeyC, keycodes.KeyLeft, keycodes.KeyEscape, keycodes.KeySpace,
-	keycodes.Key4, keycodes.KeyR, keycodes.KeyF, keycodes.KeyV, kcNO, kcNO, keycodes.KeyWindows,
-	keycodes.Key5, keycodes.KeyT, keycodes.KeyG, keycodes.KeyB, keycodes.KeyRight, kcLCAG, keycodes.KeyLeftCtrl,
-	keycodes.Key6, keycodes.KeyY, keycodes.KeyH, keycodes.KeyN, keycodes.KeyDown, keycodes.KeyEnter, kcMEH,
-	keycodes.Key7, keycodes.KeyU, keycodes.KeyJ, keycodes.KeyM, kcNO, keycodes.KeyRightGUI, kcNO,
-	keycodes.Key8, keycodes.KeyI, keycodes.KeyK, keycodes.KeyComma, keycodes.KeyUp, keycodes.KeyPageUp, keycodes.KeyBackspace,
-	keycodes.Key9, keycodes.KeyO, keycodes.KeyL, keycodes.KeyPeriod, keycodes.KeyLeftBracket, kcNO, keycodes.KeyPageDown,
-	keycodes.Key0, keycodes.KeyP, keycodes.KeySemicolon, keycodes.KeySlash, keycodes.KeyRightBracket, kcNO, kcNO,
-	keycodes.KeyMinus, keycodes.KeyBackslash, keycodes.KeyQuote, keycodes.KeyRightShift, kcNO, kcNO, kcNO,
-	keycodes.KeyEscape, keycodes.KeyF3, keycodes.KeyF6, keycodes.KeyF9, keycodes.KeyF12, kcNO, kcNO,
-	keycodes.KeyF1, keycodes.KeyF4, keycodes.KeyF7, keycodes.KeyF10, kcNO, kcNO, kcNO,
-	keycodes.KeyF2, keycodes.KeyF5, keycodes.KeyF8, keycodes.KeyF11, kcNO, kcNO, kcNO,
+	KeyEqual, KeyTab, KeyLeftCtrl, KeyLeftShift, kcNO, kcNO, kcNO,
+	Key1, KeyQ, KeyA, KeyZ, KeyGrave, kcNO, kcNO,
+	Key2, KeyW, KeyS, KeyX, KeyInsert, KeyLeftAlt, kcNO,
+	Key3, KeyE, KeyD, KeyC, KeyLeft, KeyEscape, KeySpace,
+	Key4, KeyR, KeyF, KeyV, kcNO, kcNO, KeyWindows,
+	Key5, KeyT, KeyG, KeyB, KeyRight, kcLCAG, KeyLeftCtrl,
+	Key6, KeyY, KeyH, KeyN, KeyDown, KeyEnter, kcMEH,
+	Key7, KeyU, KeyJ, KeyM, kcNO, KeyRightGUI, kcNO,
+	Key8, KeyI, KeyK, KeyComma, KeyUp, KeyPageUp, KeyBackspace,
+	Key9, KeyO, KeyL, KeyPeriod, KeyLeftBracket, kcNO, KeyPageDown,
+	Key0, KeyP, KeySemicolon, KeySlash, KeyRightBracket, kcNO, kcNO,
+	KeyMinus, KeyBackslash, KeyQuote, KeyRightShift, kcNO, kcNO, kcNO,
+	KeyEscape, KeyF3, KeyF6, KeyF9, KeyF12, kcNO, kcNO,
+	KeyF1, KeyF4, KeyF7, KeyF10, kcNO, kcNO, kcNO,
+	KeyF2, KeyF5, KeyF8, KeyF11, kcNO, kcNO, kcNO,
 }
 
 func main() {
