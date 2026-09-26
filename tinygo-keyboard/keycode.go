@@ -94,7 +94,12 @@ const (
 	KeyRightCtrl  = keycodes.TypeNormal | 0xE4
 	KeyRightShift = keycodes.TypeNormal | 0xE5
 	KeyRightAlt   = keycodes.TypeNormal | 0xE6
-	KeyRightGUI   = keycodes.TypeNormal | 0xE7
+
+	// TinyGo modifier bits. The high byte 0xE0 selects the modifier byte.
+	// macOS reads bit 3 and bit 7 as left and right Command.
+	// TypeNormal|0xE3 and TypeNormal|0xE7 stay in the 6-key array, where macOS sees one Command.
+	KeyLeftGUI  = 0xE008 // bit 3, 0b00001000
+	KeyRightGUI = 0xE080 // bit 7, 0b10000000
 )
 
 const (

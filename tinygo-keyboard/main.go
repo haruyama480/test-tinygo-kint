@@ -28,7 +28,7 @@ var layer0 = [15 * 7]keyboard.Keycode{
 	Key1, KeyQ, KeyA, KeyZ, KeyGrave, kcNO, kcNO,
 	Key2, KeyW, KeyS, KeyX, KeyInsert, KeyLeftAlt, kcNO,
 	Key3, KeyE, KeyD, KeyC, KeyLeft, KeyEscape, KeySpace,
-	Key4, KeyR, KeyF, KeyV, kcNO, kcNO, KeyWindows,
+	Key4, KeyR, KeyF, KeyV, kcNO, kcNO, KeyLeftGUI,
 	Key5, KeyT, KeyG, KeyB, KeyRight, kcLCAG, KeyLeftCtrl,
 	Key6, KeyY, KeyH, KeyN, KeyDown, KeyEnter, kcMEH,
 	Key7, KeyU, KeyJ, KeyM, kcNO, KeyRightGUI, kcNO,
